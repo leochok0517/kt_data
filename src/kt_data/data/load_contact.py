@@ -13,7 +13,7 @@ from pathlib import Path
 
 import numpy as np
 
-_DEFAULT_PATH = Path("data/external/contact_matrices/empirical_matrices_15.npz")
+from kt_data.data import DATA_ROOT
 
 AGE_LABELS_15: list[str] = [
     "0-4", "5-9", "10-14", "15-19", "20-24", "25-29",
@@ -34,7 +34,7 @@ DEFAULT_LAMBDAS: dict[str, dict[str, float]] = {
 
 
 def load_contact_matrices(
-    path: Path = _DEFAULT_PATH,
+    path: Path | None = None,
     transpose_to_model_convention: bool = True,
 ) -> dict:
     """NIMS contact matrices를 모델 컨벤션으로 로드.
@@ -51,6 +51,8 @@ def load_contact_matrices(
             'metadata': dict,
         }
     """
+    if path is None:
+        path = DATA_ROOT / "external" / "contact_matrices" / "empirical_matrices_15.npz"
     if not path.exists():
         raise FileNotFoundError(path)
 

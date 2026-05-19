@@ -22,9 +22,8 @@ from pathlib import Path
 import numpy as np
 import polars as pl
 
-from src.data.load_population import load_population_15groups
-
-_MOVEMENT_DIR = Path("data/raw/movement")
+from kt_data.data import DATA_ROOT
+from kt_data.data.load_population import load_population_15groups
 
 AGE_GROUPS_USED: list[int] = [10, 20, 30, 40, 50, 60, 70]  # 70은 70+
 N_AGES: int = 7
@@ -100,7 +99,7 @@ def load_mobility(
         holidays = HOLIDAYS
 
     t0 = time.perf_counter()
-    path = _MOVEMENT_DIR / f"movement_sudogwon_{yyyymm}.parquet"
+    path = DATA_ROOT / "raw" / "movement" / f"movement_sudogwon_{yyyymm}.parquet"
     if not path.exists():
         raise FileNotFoundError(path)
 

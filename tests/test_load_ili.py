@@ -8,7 +8,7 @@ import numpy as np
 import polars as pl
 import pytest
 
-from src.data.load_ili import (
+from kt_data.data.load_ili import (
     N_SLOTS,
     SEASON_WEEKS,
     get_ili_timeseries,

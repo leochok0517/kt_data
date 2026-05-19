@@ -6,7 +6,7 @@ import numpy as np
 import polars as pl
 import pytest
 
-from src.data.load_mobility import (
+from kt_data.data.load_mobility import (
     AGE_GROUPS_USED,
     HOLIDAYS,
     N_AGES,

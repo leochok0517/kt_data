@@ -5,7 +5,7 @@ from __future__ import annotations
 import numpy as np
 import pytest
 
-from src.data.load_contact import (
+from kt_data.data.load_contact import (
     AGE_LABELS_15,
     DEFAULT_LAMBDAS,
     SETTINGS,

@@ -27,7 +27,8 @@ from pathlib import Path
 import numpy as np
 import polars as pl
 
-_DEFAULT_PATH = Path("data/external/ili/2018-2023_ILI.csv")
+from kt_data.data import DATA_ROOT
+
 N_SLOTS = 54  # CSV 한 행의 데이터 슬롯 수 (week_in_season 0..53)
 UNIFIED_SEASON_LEN = 52  # 모든 시즌을 52주로 통일
 
@@ -72,7 +73,7 @@ def week_in_season_to_iso_week(season: str, week_in_season: int) -> tuple[int, i
     return (start_year + 1, week_in_season - 16)
 
 
-def load_ili_seasons(path: Path = _DEFAULT_PATH) -> pl.DataFrame:
+def load_ili_seasons(path: Path | None = None) -> pl.DataFrame:
     """ILI long-format DataFrame.
 
     Columns:
@@ -82,6 +83,8 @@ def load_ili_seasons(path: Path = _DEFAULT_PATH) -> pl.DataFrame:
 
     Row count: 5 × N_SLOTS = 270 (모든 시즌 같은 슬롯 수 유지 — 시즌 길이는 is_valid_week로).
     """
+    if path is None:
+        path = DATA_ROOT / "external" / "ili" / "2018-2023_ILI.csv"
     if not path.exists():
         raise FileNotFoundError(path)
 

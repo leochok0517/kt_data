@@ -4,7 +4,7 @@ from __future__ import annotations
 
 import pytest
 
-from src.data.load_calendar import (
+from kt_data.data.load_calendar import (
     DAYTYPES,
     HOLIDAYS_2018_2023,
     classify_date,

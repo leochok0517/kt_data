@@ -5,7 +5,7 @@ from __future__ import annotations
 import polars as pl
 import pytest
 
-from src.data.load_population import (
+from kt_data.data.load_population import (
     AGE_LABELS_15,
     AGE_STARTS_15,
     get_population_matrix,

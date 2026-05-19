@@ -12,6 +12,8 @@ from pathlib import Path
 import numpy as np
 import polars as pl
 
+from kt_data.data import DATA_ROOT
+
 AGE_LABELS_15: list[str] = [
     "0-4", "5-9", "10-14", "15-19", "20-24", "25-29",
     "30-34", "35-39", "40-44", "45-49", "50-54", "55-59",
@@ -20,11 +22,10 @@ AGE_LABELS_15: list[str] = [
 AGE_STARTS_15: list[int] = [0, 5, 10, 15, 20, 25, 30, 35, 40, 45, 50, 55, 60, 65, 70]
 
 _SUDOGWON = ("서울특별시", "경기도", "인천광역시")
-_DEFAULT_PATH = Path("data/mapping/mois_population_202301.parquet")
 
 
 def load_population_15groups(
-    path: Path = _DEFAULT_PATH,
+    path: Path | None = None,
     only_sudogwon: bool = True,
 ) -> pl.DataFrame:
     """주민등록 인구를 NIMS 15군으로 매핑.
@@ -37,6 +38,8 @@ def load_population_15groups(
         columns = [admdong_cd, admdong_nm, sgg_nm, sido_nm, age_group, age_idx, pop]
         — 행정동마다 정확히 15개 행 (없는 그룹은 pop=0).
     """
+    if path is None:
+        path = DATA_ROOT / "mapping" / "mois_population_202301.parquet"
     df = pl.read_parquet(path)
     if only_sudogwon:
         df = df.filter(pl.col("sido_nm").is_in(_SUDOGWON))
