@@ -32,6 +32,57 @@ from kt_data.data import DATA_ROOT
 N_SLOTS = 54  # CSV 한 행의 데이터 슬롯 수 (week_in_season 0..53)
 UNIFIED_SEASON_LEN = 52  # 모든 시즌을 52주로 통일
 
+# 7 개 연령 그룹 (질병관리청 분류)
+ILI_AGE_GROUPS: list[str] = ["0", "1-6", "7-12", "13-18", "19-49", "50-64", "65+"]
+
+# 그룹명 → 파일명 (한글 suffix)
+_ILI_AGE_FILE_SUFFIX: dict[str, str] = {
+    "0":      "0세",
+    "1-6":    "1-6세",
+    "7-12":   "7-12세",
+    "13-18":  "13-18세",
+    "19-49":  "19-49세",
+    "50-64":  "50-64세",
+    "65+":    "65세이상",
+}
+
+# 각 그룹 → NIMS 15군 인덱스 (단순 합산 매핑).
+# NIMS: 0-4, 5-9, 10-14, 15-19, 20-24, 25-29, 30-34, 35-39, 40-44, 45-49, 50-54, 55-59, 60-64, 65-69, 70+
+# DEPRECATED — 정확한 인구 비례 분배는 ILI_GROUP_TO_NIMS_WEIGHTED 사용.
+ILI_GROUP_TO_NIMS: dict[str, list[int]] = {
+    "0":     [0],                    # 0-4 (0세만 → 0-4 그대로)
+    "1-6":   [0, 1],                 # 0-4 + 5-9
+    "7-12":  [1, 2],                 # 5-9 + 10-14
+    "13-18": [2, 3],                 # 10-14 + 15-19
+    "19-49": [4, 5, 6, 7, 8, 9],     # 20-24 ~ 45-49
+    "50-64": [10, 11, 12],            # 50-54 ~ 60-64
+    "65+":   [13, 14],                # 65-69 + 70+
+}
+
+# 정확한 인구비례 매핑 (NIMS 5세 그룹 내 균등 연령 분포 가정).
+# {ILI_그룹: {nims_idx: weight}}. weight = ILI 그룹이 NIMS 5세 그룹에서 차지하는 비율.
+# 예: ILI '0세' 는 NIMS 0-4 (5 ages) 중 1 age → 1/5 = 0.2.
+# 검증: 각 NIMS idx 의 weight 합 = 1.0 (전 ILI 그룹 합산 시).
+ILI_GROUP_TO_NIMS_WEIGHTED: dict[str, dict[int, float]] = {
+    "0":     {0: 0.2},                                 # 0세 = NIMS 0-4 의 1/5
+    "1-6":   {0: 0.8, 1: 0.4},                         # 1-4세 (4/5) + 5-6세 (2/5)
+    "7-12":  {1: 0.6, 2: 0.6},                         # 7-9세 (3/5) + 10-12세 (3/5)
+    "13-18": {2: 0.4, 3: 0.8},                         # 13-14세 (2/5) + 15-18세 (4/5)
+    "19-49": {3: 0.2, 4: 1.0, 5: 1.0, 6: 1.0,          # 19세 (1/5) + 20-49세 전부
+              7: 1.0, 8: 1.0, 9: 1.0},
+    "50-64": {10: 1.0, 11: 1.0, 12: 1.0},               # 50-64세 전부
+    "65+":   {13: 1.0, 14: 1.0},                         # 65-69 + 70+
+}
+
+
+def _verify_weighted_coverage() -> dict[int, float]:
+    """각 NIMS 인덱스에서 전 ILI 그룹의 weight 합 (검증용 — 1.0 기대)."""
+    total: dict[int, float] = {i: 0.0 for i in range(15)}
+    for weights in ILI_GROUP_TO_NIMS_WEIGHTED.values():
+        for nims_idx, w in weights.items():
+            total[nims_idx] += w
+    return total
+
 
 @lru_cache(maxsize=64)
 def _iso_weeks_in_year(year: int) -> int:
@@ -129,6 +180,39 @@ def load_ili_seasons(path: Path | None = None) -> pl.DataFrame:
         ],
         orient="row",
     )
+
+
+def load_ili_by_age(
+    age_group: str,
+    path: Path | None = None,
+) -> pl.DataFrame:
+    """한 연령 그룹 ILI long-format DataFrame.
+
+    Args:
+        age_group: ILI_AGE_GROUPS 의 한 값.
+        path: 직접 지정 (없으면 data/external/ili/2018-2023_ILI_<suffix>.csv).
+
+    Returns:
+        load_ili_seasons 와 동일 schema — 컬럼: season, season_start_year,
+        week_in_season, iso_week, calendar_year, is_valid_week, ili_rate.
+    """
+    if age_group not in _ILI_AGE_FILE_SUFFIX:
+        raise ValueError(
+            f"age_group must be in {ILI_AGE_GROUPS}, got {age_group!r}"
+        )
+    if path is None:
+        suffix = _ILI_AGE_FILE_SUFFIX[age_group]
+        path = DATA_ROOT / "external" / "ili" / f"2018-2023_ILI_{suffix}.csv"
+    return load_ili_seasons(path=path)
+
+
+def load_ili_all_age_groups() -> dict[str, pl.DataFrame]:
+    """모든 연령 그룹 (7 개) ILI DataFrame.
+
+    Returns:
+        {age_group: DataFrame}
+    """
+    return {ag: load_ili_by_age(ag) for ag in ILI_AGE_GROUPS}
 
 
 def get_ili_timeseries(

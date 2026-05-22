@@ -9,10 +9,16 @@ import polars as pl
 import pytest
 
 from kt_data.data.load_ili import (
+    ILI_AGE_GROUPS,
+    ILI_GROUP_TO_NIMS,
+    ILI_GROUP_TO_NIMS_WEIGHTED,
     N_SLOTS,
     SEASON_WEEKS,
+    _verify_weighted_coverage,
     get_ili_timeseries,
     get_season_length,
+    load_ili_all_age_groups,
+    load_ili_by_age,
     load_ili_seasons,
     week_in_season_to_iso_week,
 )
@@ -147,3 +153,90 @@ def test_iso_week_in_valid_range(df: pl.DataFrame) -> None:
     expected_max = max(iso)
     expected_min = min(iso)
     assert expected_min >= 1 and expected_max <= 53
+
+
+# ---------- Age-group ILI ----------
+
+def test_age_groups_constants() -> None:
+    assert ILI_AGE_GROUPS == ["0", "1-6", "7-12", "13-18", "19-49", "50-64", "65+"]
+    assert set(ILI_GROUP_TO_NIMS.keys()) == set(ILI_AGE_GROUPS)
+
+
+def test_age_groups_cover_all_nims_15() -> None:
+    """ILI_GROUP_TO_NIMS 의 합집합이 NIMS 0..14 모두 커버."""
+    covered = set()
+    for idx_list in ILI_GROUP_TO_NIMS.values():
+        covered.update(idx_list)
+    assert covered == set(range(15))
+
+
+def test_load_by_age_0() -> None:
+    df = load_ili_by_age("0")
+    assert df.height == 5 * N_SLOTS
+    assert set(df.columns) >= {"season", "week_in_season", "ili_rate", "is_valid_week"}
+
+
+def test_load_by_age_19_49() -> None:
+    df = load_ili_by_age("19-49")
+    assert df.height == 5 * N_SLOTS
+
+
+def test_load_by_age_65plus() -> None:
+    df = load_ili_by_age("65+")
+    assert df.height == 5 * N_SLOTS
+
+
+def test_load_by_age_invalid_raises() -> None:
+    with pytest.raises(ValueError):
+        load_ili_by_age("invalid_age_group")
+
+
+def test_load_all_age_groups_returns_7() -> None:
+    d = load_ili_all_age_groups()
+    assert set(d.keys()) == set(ILI_AGE_GROUPS)
+    for ag, df_ag in d.items():
+        assert df_ag.height == 5 * N_SLOTS
+
+
+def test_age_groups_have_different_data() -> None:
+    """7 개 그룹이 서로 다른 ILI 시계열 (단순 sanity)."""
+    d = load_ili_all_age_groups()
+    # 0 vs 19-49 평균 비교 — 같지 않음
+    mean_0 = d["0"].filter(pl.col("is_valid_week"))["ili_rate"].mean()
+    mean_adult = d["19-49"].filter(pl.col("is_valid_week"))["ili_rate"].mean()
+    assert mean_0 != mean_adult
+
+
+# ---------- WEIGHTED mapping ----------
+
+def test_weighted_mapping_keys_match_age_groups() -> None:
+    assert set(ILI_GROUP_TO_NIMS_WEIGHTED.keys()) == set(ILI_AGE_GROUPS)
+
+
+def test_weighted_coverage_sums_to_one() -> None:
+    """각 NIMS idx 0-14 에서 전 ILI 그룹 weight 합 = 1.0."""
+    coverage = _verify_weighted_coverage()
+    for nims_idx in range(15):
+        assert coverage[nims_idx] == pytest.approx(1.0, abs=1e-9), (
+            f"NIMS {nims_idx} coverage = {coverage[nims_idx]} != 1.0"
+        )
+
+
+def test_weighted_no_negative_weights() -> None:
+    for ag, weights in ILI_GROUP_TO_NIMS_WEIGHTED.items():
+        for nims_idx, w in weights.items():
+            assert w >= 0, f"negative weight {ag}/{nims_idx} = {w}"
+
+
+def test_weighted_no_weight_above_one() -> None:
+    for ag, weights in ILI_GROUP_TO_NIMS_WEIGHTED.items():
+        for nims_idx, w in weights.items():
+            assert w <= 1.0 + 1e-12, (
+                f"weight > 1: {ag}/{nims_idx} = {w}"
+            )
+
+
+def test_weighted_nims_indices_in_range() -> None:
+    for weights in ILI_GROUP_TO_NIMS_WEIGHTED.values():
+        for nims_idx in weights:
+            assert 0 <= nims_idx <= 14
